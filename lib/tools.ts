@@ -1,6 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { ApiRequestError, createReturn, getCategories, getOrder, getProductById, getProducts, getProductStock, preauthorizeRefund, notifyReturnInProcess } from "@/lib/api";
+import { ApiRequestError, createReturn, getCategories, getOrder, getProductById, getProductStock, getProducts, preauthorizeRefund, notifyReturnInProcess } from "@/lib/api";
+import { start } from "workflow/api";
+import { returnFlow } from "./workflows/return-flow";
 
 export const searchProducts = tool({
   description: `Search or browse the Vercel swag store product catalog. Use this for broad questions: what the store sells, finding products by keyword or category, comparing options, or recommendations. Returns short summaries (one image, price, description) for up to 10 products, including each product's slug. Optionally narrow results to a single category. For questions about ONE specific product (stock, all images, full details), use getProductDetails instead - only call this first if you need to find that product's slug.`,
@@ -19,6 +21,7 @@ export const searchProducts = tool({
       ),
   }),
   execute: async ({ query, category }) => {
+    "use step";
     try {
       const products = await getProducts({
         search: query,
@@ -46,49 +49,11 @@ export const searchProducts = tool({
   },
 });
 
-export const getProductDetails = tool({
-  description: `Get the full details and live stock for ONE specific product, by its id or slug. Use this whenever the user asks about a particular item, e.g. "tell me more about the black hoodie" or "is the desk mat in stock?". Returns every image, tags and current stock level, which searchProducts does not. If you only know the product's name, call searchProducts first to find its slug.`,
-  inputSchema: z.object({
-    idOrSlug: z
-      .string()
-      .describe(
-        `The product's id or slug, exactly as returned in a searchProducts result. Don't guess it from the product name.`,
-      ),
-  }),
-  execute: async ({ idOrSlug }) => {
-    try {
-      const [product, stock] = await Promise.all([
-        getProductById(idOrSlug),
-        getProductStock(idOrSlug),
-      ]);
-      return {
-        id: product.id,
-        name: product.name,
-        slug: product.slug,
-        description: product.description,
-        price: product.price,
-        currency: product.currency,
-        category: product.category,
-        images: product.images,
-        tags: product.tags,
-        featured: product.featured,
-        createdAt: product.createdAt,
-        stock: stock.stock,
-        inStock: stock.inStock,
-        lowStock: stock.lowStock,
-      };
-    } catch (err) {
-      const message =
-        err instanceof ApiRequestError ? err.message : "Unknown error";
-      return { error: message };
-    }
-  },
-});
-
 export const getAllCategories = tool({
   description: `List every product category available in the Vercel swag store, along with the number of products in each. Use this when the user asks what categories exist, what kinds of products are sold, or wants to browse the store at a high level.`,
   inputSchema: z.object({}),
   execute: async () => {
+    "use step";
     try {
       const categories = await getCategories();
       return {
@@ -120,19 +85,44 @@ export const returnOrder = tool({
       .describe("Why the user is returning the order."),
   }),
   execute: async ({ orderId, reason }) => {
+    "use step";
+    const run = await start(returnFlow, [orderId, reason]);
+    return { runId: run.runId, message: `Return request received for order ${orderId}.` };
+  },
+});
+
+export const getProductDetails = tool({
+  description: `Get the full details and live stock for ONE specific product, by its id or slug. Use this whenever the user asks about a particular item, e.g. "tell me more about the black hoodie" or "is the desk mat in stock?". Returns every image, tags and current stock level, which searchProducts does not. If you only know the product's name, call searchProducts first to find its slug.`,
+  inputSchema: z.object({
+    idOrSlug: z
+      .string()
+      .describe(
+        `The product's id or slug, exactly as returned in a searchProducts result. Don't guess it from the product name.`,
+      ),
+  }),
+  execute: async ({ idOrSlug }) => {
+    "use step";
     try {
-      const order = await getOrder(orderId);
-      await notifyReturnInProcess(orderId);
-      await preauthorizeRefund(orderId);
-      const filed = await createReturn({
-        orderId: order.id,
-        items: order.items.map((i) => ({
-          productId: i.productId,
-          quantity: i.quantity,
-        })),
-        reason,
-      });
-      return { returnId: filed.id, status: filed.status };
+      const [product, stock] = await Promise.all([
+        getProductById(idOrSlug),
+        getProductStock(idOrSlug),
+      ]);
+      return {
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        description: product.description,
+        price: product.price,
+        currency: product.currency,
+        category: product.category,
+        images: product.images,
+        tags: product.tags,
+        featured: product.featured,
+        createdAt: product.createdAt,
+        stock: stock.stock,
+        inStock: stock.inStock,
+        lowStock: stock.lowStock,
+      };
     } catch (err) {
       const message =
         err instanceof ApiRequestError ? err.message : "Unknown error";
