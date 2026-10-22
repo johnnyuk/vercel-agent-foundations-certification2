@@ -1,7 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { Check, ShoppingCart } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useCart } from "@/components/cart-provider";
 import { formatPrice } from "@/lib/format";
 import type { ProductDetailsToolInvocation } from "@/lib/agent";
 
@@ -10,6 +14,9 @@ interface AgentProductCardProps {
 }
 
 export function AgentProductCard({ invocation }: AgentProductCardProps) {
+  const { addToCart } = useCart();
+  const [isAdded, setIsAdded] = useState(false);
+
   if (
     invocation.state === "input-streaming" ||
     invocation.state === "input-available"
@@ -36,17 +43,25 @@ export function AgentProductCard({ invocation }: AgentProductCardProps) {
     );
   }
 
-  const image = output.images[0];
-  const stockLabel = !output.inStock
+  const { stock, inStock, lowStock, ...product } = output;
+  const image = product.images[0];
+  const stockLabel = !inStock
     ? "Out of stock"
-    : output.lowStock
-      ? `Only ${output.stock} left`
-      : `In stock (${output.stock})`;
-  const stockClass = !output.inStock
+    : lowStock
+      ? `Only ${stock} left`
+      : `In stock (${stock})`;
+  const stockClass = !inStock
     ? "text-destructive"
-    : output.lowStock
+    : lowStock
       ? "text-amber-600"
       : "text-emerald-600";
+
+  const handleAddToCart = () => {
+    if (!inStock) return;
+    addToCart(product, 1);
+    setIsAdded(true);
+    setTimeout(() => setIsAdded(false), 2000);
+  };
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card">
@@ -54,7 +69,7 @@ export function AgentProductCard({ invocation }: AgentProductCardProps) {
         <div className="relative aspect-4/3 bg-secondary">
           <Image
             src={image}
-            alt={output.name}
+            alt={product.name}
             fill
             sizes="(min-width: 768px) 480px, 100vw"
             className="object-cover"
@@ -65,10 +80,10 @@ export function AgentProductCard({ invocation }: AgentProductCardProps) {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold leading-tight">
-              {output.name}
+              {product.name}
             </h3>
             <p className="text-sm text-muted-foreground">
-              {formatPrice(output.price, output.currency)}
+              {formatPrice(product.price, product.currency)}
             </p>
           </div>
           <span className={`shrink-0 text-xs font-medium ${stockClass}`}>
@@ -76,11 +91,11 @@ export function AgentProductCard({ invocation }: AgentProductCardProps) {
           </span>
         </div>
         <p className="line-clamp-3 text-sm text-muted-foreground">
-          {output.description}
+          {product.description}
         </p>
-        {output.tags.length > 0 && (
+        {product.tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {output.tags.slice(0, 5).map((tag) => (
+            {product.tags.slice(0, 5).map((tag) => (
               <span
                 key={tag}
                 className="rounded-full bg-secondary px-2 py-0.5 text-xs text-muted-foreground"
@@ -90,12 +105,29 @@ export function AgentProductCard({ invocation }: AgentProductCardProps) {
             ))}
           </div>
         )}
-        <Link
-          href={`/products/${output.slug}`}
-          className="inline-flex text-sm font-medium text-foreground underline-offset-4 hover:underline"
-        >
-          View product →
-        </Link>
+        <div className="flex items-center justify-between gap-3">
+          <Button size="sm" onClick={handleAddToCart} disabled={!inStock}>
+            {isAdded ? (
+              <>
+                <Check className="mr-1 h-4 w-4" />
+                Added to cart
+              </>
+            ) : !inStock ? (
+              "Out of stock"
+            ) : (
+              <>
+                <ShoppingCart className="mr-1 h-4 w-4" />
+                Add to cart
+              </>
+            )}
+          </Button>
+          <Link
+            href={`/products/${product.slug}`}
+            className="inline-flex text-sm font-medium text-foreground underline-offset-4 hover:underline"
+          >
+            View product →
+          </Link>
+        </div>
       </div>
     </div>
   );

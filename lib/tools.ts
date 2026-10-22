@@ -72,6 +72,7 @@ export const getProductDetails = tool({
         images: product.images,
         tags: product.tags,
         featured: product.featured,
+        createdAt: product.createdAt,
         stock: stock.stock,
         inStock: stock.inStock,
         lowStock: stock.lowStock,
