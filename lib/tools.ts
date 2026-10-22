@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ApiRequestError, createReturn, getBackOfficeReturns, getBackOfficeSales, getBackOfficeStock, getBackOfficeSupportTickets, getCategories, getOrder, getProductById, getProductStock, getProducts, preauthorizeRefund, notifyReturnInProcess } from "@/lib/api";
 import { start } from "workflow/api";
 import { returnFlow } from "./workflows/return-flow";
-import { createOrGetSandbox, SANDBOX_NAME } from "@/lib/sandbox";
+import { createOrGetSandbox, saveToolResult, SANDBOX_NAME } from "@/lib/sandbox";
 
 export const searchProducts = tool({
   description: `Search or browse the Vercel swag store product catalog. Use this for broad questions: what the store sells, finding products by keyword or category, comparing options, or recommendations. Returns short summaries (one image, price, description) for up to 10 products, including each product's slug. Optionally narrow results to a single category. For questions about ONE specific product (stock, all images, full details), use getProductDetails instead - only call this first if you need to find that product's slug.`,
@@ -187,7 +187,8 @@ export const getSupportTickets = tool({
         assignee,
         limit,
       });
-      return { count: data.length, tickets: data, range: meta };
+      const result = { count: data.length, tickets: data, range: meta };
+      return { ...result, ...(await saveToolResult("/tmp/tickets.json", result)) };
     } catch (err) {
       const message =
         err instanceof ApiRequestError ? err.message : "Unknown error";
@@ -223,7 +224,8 @@ export const getReturnsHistory = tool({
         decision,
         limit,
       });
-      return { count: data.length, returns: data, range: meta };
+      const result = { count: data.length, returns: data, range: meta };
+      return { ...result, ...(await saveToolResult("/tmp/returns.json", result)) };
     } catch (err) {
       const message =
         err instanceof ApiRequestError ? err.message : "Unknown error";
@@ -262,7 +264,8 @@ export const getInventoryStock = tool({
         page,
         limit,
       });
-      return { count: data.length, stock: data, pagination: meta.pagination };
+      const result = { count: data.length, stock: data, pagination: meta.pagination };
+      return { ...result, ...(await saveToolResult("/tmp/stock.json", result)) };
     } catch (err) {
       const message =
         err instanceof ApiRequestError ? err.message : "Unknown error";
@@ -293,7 +296,8 @@ export const getSalesAnalytics = tool({
     "use step";
     try {
       const { data, meta } = await getBackOfficeSales({ from, to, productId });
-      return { count: data.length, sales: data, summary: meta };
+      const result = { count: data.length, sales: data, summary: meta };
+      return { ...result, ...(await saveToolResult("/tmp/sales.json", result)) };
     } catch (err) {
       const message =
         err instanceof ApiRequestError ? err.message : "Unknown error";

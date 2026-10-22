@@ -94,9 +94,9 @@ export function AdminAgentChat() {
                         </span>
                       </div>
                       <div className="px-3 py-2">
-                        <div className="text-neutral-100 font-semibold">
+                        <pre className="whitespace-pre-wrap break-words text-neutral-100 font-semibold">
                           $ {input?.command}
-                        </div>
+                        </pre>
                         {p.state === "output-available" && output && (
                           <div className="mt-1 text-neutral-300">
                             {output.stdout && (
